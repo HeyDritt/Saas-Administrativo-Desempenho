@@ -1,36 +1,117 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🛰️ Sputnik Dashboard
 
-## Getting Started
+**SaaS B2B de Gestão e Performance de Funcionários** — Painel administrativo web para gestão comercial, acompanhamento de metas, análise de performance individual e gestão de comissões.
 
-First, run the development server:
+---
+
+## ✨ Funcionalidades
+
+- **Autenticação em duas camadas**: senha + MFA via WhatsApp (n8n webhook)
+- **Conta demo read-only**: `gestor@sputnik.com` — bypass de MFA, somente leitura garantida por RLS
+- **Dashboard analítico**: KPIs, gráfico de tendência (realizado vs. meta), gráfico de conversão por vendedor
+- **Extrato individual**: progressão semanal por funcionário com gráfico e insights de comportamento
+- **Modo offline**: funciona com dados mock quando Supabase não está configurado
+- **Dark mode nativo**: design system completo com Inter + JetBrains Mono
+- **Responsivo**: breakpoint em 900px para mobile/tablet
+
+---
+
+## 🚀 Setup Rápido
+
+### 1. Instalar dependências
+
+```bash
+npm install
+```
+
+### 2. Variáveis de ambiente
+
+```bash
+cp .env.local.example .env.local
+```
+
+Edite `.env.local` com seus valores:
+
+| Variável | Onde encontrar |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase > Project Settings > API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase > Project Settings > API |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase > Project Settings > API > service_role |
+| `N8N_MFA_WEBHOOK_URL` | URL do webhook no seu n8n |
+
+### 3. Banco de dados (Supabase)
+
+Execute no SQL Editor do Supabase, na ordem:
+
+```
+sql/01_schema.sql   <- tabelas, view, extensoes
+sql/02_rls.sql      <- Row Level Security
+sql/03_seed.sql     <- 6 funcionarios + performance
+```
+
+### 4. Conta demo
+
+1. Supabase > Authentication > Users > Add user: `gestor@sputnik.com` / `SputnikDemo2026`
+2. Copie o UUID gerado e execute:
+
+```sql
+insert into profiles (id, email, tipo_acesso) values
+  ('<UUID>', 'gestor@sputnik.com', 'demo');
+```
+
+### 5. Rodar
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Acesse: http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🔐 MFA via WhatsApp (n8n)
 
-## Learn More
+O sistema envia `POST` para `N8N_MFA_WEBHOOK_URL` com:
 
-To learn more about Next.js, take a look at the following resources:
+```json
+{
+  "phone": "+5511999990001",
+  "token": "483920",
+  "expires_at": "2026-10-01T14:35:00.000Z",
+  "message": "Seu codigo Sputnik: *483920* - Valido por 5 min."
+}
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Em desenvolvimento**: se a URL estiver vazia, o token aparece no console do servidor (`[DEV] Token MFA`).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 🏢 Regras de Negócio
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Status | Criterio |
+|---|---|
+| Superada | realizado >= 110% da meta |
+| Atingida | realizado entre 100% e 109,9% |
+| Parcial | realizado < 100% |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Comissao** = `faturamento_realizado * taxa_comissao`
+
+---
+
+## 🛡️ Segurança
+
+- `SUPABASE_SERVICE_ROLE_KEY` usado apenas em Route Handlers (server-side)
+- RLS em todas as tabelas — conta demo bloqueada de escrita pelo banco
+- Tokens MFA: expiram em 5 min, maximo 3 tentativas
+- FingerprintJS para detectar dispositivos novos
+- Dispositivos confiaveis salvos apos MFA bem-sucedido
+
+---
+
+## 📝 Suposicoes Documentadas
+
+1. Ciclo padrao hardcoded: `2026-10` — altere `CICLO_ATUAL` em `app/dashboard/page.tsx`
+2. Grafico de linha global usa valores acumulados fixos do seed
+3. Se FingerprintJS falhar, sistema exige MFA (postura segura)
+4. Telefone do usuario armazenado em `profiles.telefone`
+5. Conta demo sem Supabase configurado falhara com mensagem de instrucao
